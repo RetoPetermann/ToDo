@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aufgabenverwaltung</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <h1>Aufgabenverwaltung</h1>
+    <div class="toolbar-group">
+      <button class="btn btn-primary" onclick="openTaskModal()">+ Neue Aufgabe</button>
+      <button class="btn" onclick="openPersonsModal()">Personen</button>
+      <button class="btn" onclick="openProjectsModal()">Projekte</button>
+    </div>
+    <div class="toolbar-separator"></div>
+    <div class="toolbar-group">
+      <span style="font-size:0.8rem;color:var(--text-secondary);font-weight:600;">Farbschema:</span>
+      <div class="theme-options">
+        <div class="theme-btn" data-theme="default" title="Standard" onclick="setTheme('default')"></div>
+        <div class="theme-btn" data-theme="ocean" title="Ozean" onclick="setTheme('ocean')"></div>
+        <div class="theme-btn" data-theme="forest" title="Wald" onclick="setTheme('forest')"></div>
+        <div class="theme-btn" data-theme="sunset" title="Sonnenuntergang" onclick="setTheme('sunset')"></div>
+        <div class="theme-btn" data-theme="pastel" title="Pastell" onclick="setTheme('pastel')"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <div class="filter-group">
+      <label>Person</label>
+      <select id="filterPerson" onchange="renderBoard()">
+        <option value="">Alle</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Projekt</label>
+      <select id="filterProject" onchange="renderBoard()">
+        <option value="">Alle</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Von</label>
+      <input type="date" id="filterDateFrom" onchange="renderBoard()">
+    </div>
+    <div class="filter-group">
+      <label>Bis</label>
+      <input type="date" id="filterDateTo" onchange="renderBoard()">
+    </div>
+    <button class="btn btn-sm" onclick="clearFilters()">Filter zurücksetzen</button>
+  </div>
+
+  <!-- Board -->
+  <div class="board">
+    <div class="column planning">
+      <div class="column-header">
+        <span class="column-title">In Planung <span class="column-count" id="count-planning">0</span></span>
+      </div>
+      <div class="column-body" data-status="planning" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"></div>
+    </div>
+    <div class="column working">
+      <div class="column-header">
+        <span class="column-title">In Arbeit <span class="column-count" id="count-working">0</span></span>
+      </div>
+      <div class="column-body" data-status="working" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"></div>
+    </div>
+    <div class="column done">
+      <div class="column-header">
+        <span class="column-title">Abgeschlossen <span class="column-count" id="count-done">0</span></span>
+      </div>
+      <div class="column-body" data-status="done" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"></div>
+    </div>
+  </div>
+
+  <!-- Task Modal -->
+  <div class="modal-overlay" id="taskModal">
+    <div class="modal">
+      <h2 id="taskModalTitle">Neue Aufgabe</h2>
+      <input type="hidden" id="taskId">
+      <div class="form-group">
+        <label>Titel *</label>
+        <input type="text" id="taskTitle" placeholder="Aufgabentitel eingeben...">
+      </div>
+      <div class="form-group">
+        <label>Projekt</label>
+        <select id="taskProject"><option value="">– Kein Projekt –</option></select>
+      </div>
+      <div class="form-group">
+        <label>Person</label>
+        <select id="taskPerson"><option value="">– Nicht zugeordnet –</option></select>
+      </div>
+      <div class="form-group">
+        <label>Voraussichtlicher Aufwand (Stunden)</label>
+        <input type="number" id="taskHours" min="0" step="0.5" placeholder="z.B. 4">
+      </div>
+      <div class="form-group">
+        <label>Fälligkeitsdatum</label>
+        <input type="date" id="taskDueDate">
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="taskStatus">
+          <option value="planning">In Planung</option>
+          <option value="working">In Arbeit</option>
+          <option value="done">Abgeschlossen</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-danger" id="taskDeleteBtn" onclick="deleteTask()" style="margin-right:auto;display:none;">Löschen</button>
+        <button class="btn" onclick="closeModal('taskModal')">Abbrechen</button>
+        <button class="btn btn-primary" onclick="saveTask()">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Persons Modal -->
+  <div class="modal-overlay" id="personsModal">
+    <div class="modal">
+      <h2>Personen verwalten</h2>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <input type="text" id="newPersonName" placeholder="Name eingeben..." style="flex:1;">
+        <button class="btn btn-primary btn-sm" onclick="addPerson()">Hinzufügen</button>
+      </div>
+      <div id="personsList"></div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal('personsModal')">Schliessen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Projects Modal -->
+  <div class="modal-overlay" id="projectsModal">
+    <div class="modal">
+      <h2>Projekte verwalten</h2>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <input type="text" id="newProjectName" placeholder="Projektname eingeben..." style="flex:1;">
+        <button class="btn btn-primary btn-sm" onclick="addProject()">Hinzufügen</button>
+      </div>
+      <div id="projectsList"></div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal('projectsModal')">Schliessen</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- State ---
+    let appData = { persons: [], projects: [], tasks: [], settings: { colorScheme: 'default' } };
+    let draggedTaskId = null;
+
+    // --- API ---
+    function loadData() {
+      fetch('/api/data')
+        .then(function(res) {
+          if (!res.ok) throw new Error('Status ' + res.status);
+          return res.json();
+        })
+        .then(function(data) {
+          console.log('Daten geladen:', data);
+          appData = data;
+          applyTheme();
+          populateFilters();
+          renderBoard();
+        })
+        .catch(function(err) {
+          console.error('Laden fehlgeschlagen:', err);
+        });
+    }
+
+    function saveData() {
+      var jsonStr = JSON.stringify(appData);
+      console.log('Speichere Daten...', appData.projects.length, 'Projekte,', appData.tasks.length, 'Tasks');
+      fetch('/api/data', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: jsonStr
+      })
+      .then(function(res) {
+        if (!res.ok) throw new Error('Status ' + res.status);
+        return res.json();
+      })
+      .then(function(result) {
+        console.log('Gespeichert:', result);
+      })
+      .catch(function(err) {
+        console.error('Speichern fehlgeschlagen:', err);
+        alert('Fehler beim Speichern: ' + err.message);
+      });
+    }
+
+    // --- Helpers ---
+    function generateId() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+
+    function getPersonName(id) {
+      const p = appData.persons.find(p => p.id === id);
+      return p ? p.name : '';
+    }
+
+    function getProjectName(id) {
+      const p = appData.projects.find(p => p.id === id);
+      return p ? p.name : '';
+    }
+
+    // --- Theme ---
+    function setTheme(theme) {
+      appData.settings.colorScheme = theme;
+      applyTheme();
+      saveData();
+    }
+
+    function applyTheme() {
+      const theme = appData.settings.colorScheme || 'default';
+      if (theme === 'default') {
+        document.documentElement.removeAttribute('data-theme');
+      } else {
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+      document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.theme === theme);
+      });
+    }
+
+    // --- Filters ---
+    function populateFilters() {
+      const personSelect = document.getElementById('filterPerson');
+      const projectSelect = document.getElementById('filterProject');
+      const currentPerson = personSelect.value;
+      const currentProject = projectSelect.value;
+
+      personSelect.innerHTML = '<option value="">Alle</option>' +
+        appData.persons.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+      projectSelect.innerHTML = '<option value="">Alle</option>' +
+        appData.projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+
+      personSelect.value = currentPerson;
+      projectSelect.value = currentProject;
+    }
+
+    function clearFilters() {
+      document.getElementById('filterPerson').value = '';
+      document.getElementById('filterProject').value = '';
+      document.getElementById('filterDateFrom').value = '';
+      document.getElementById('filterDateTo').value = '';
+      renderBoard();
+    }
+
+    function getFilteredTasks() {
+      const personId = document.getElementById('filterPerson').value;
+      const projectId = document.getElementById('filterProject').value;
+      const dateFrom = document.getElementById('filterDateFrom').value;
+      const dateTo = document.getElementById('filterDateTo').value;
+
+      return appData.tasks.filter(t => {
+        if (personId && t.person !== personId) return false;
+        if (projectId && t.project !== projectId) return false;
+        if (dateFrom && t.dueDate && t.dueDate < dateFrom) return false;
+        if (dateTo && t.dueDate && t.dueDate > dateTo) return false;
+        return true;
+      });
+    }
+
+    // --- Board Rendering ---
+    function renderBoard() {
+      const tasks = getFilteredTasks();
+      const statuses = ['planning', 'working', 'done'];
+
+      statuses.forEach(status => {
+        const body = document.querySelector(`.column-body[data-status="${status}"]`);
+        const statusTasks = tasks.filter(t => t.status === status);
+        const countEl = document.getElementById(`count-${status}`);
+        countEl.textContent = statusTasks.length;
+
+        if (statusTasks.length === 0) {
+          body.innerHTML = '<div class="empty-state">Keine Aufgaben</div>';
+          return;
+        }
+
+        body.innerHTML = statusTasks.map(t => `
+          <div class="task-card" draggable="true" data-id="${t.id}"
+               ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"
+               ondblclick="openTaskModal('${t.id}')">
+            ${t.project ? `<div class="task-card-project">${escHtml(getProjectName(t.project))}</div>` : ''}
+            <div class="task-card-title">${escHtml(t.title)}</div>
+            <div class="task-card-meta">
+              ${t.person ? `<span class="task-card-tag">&#128100; ${escHtml(getPersonName(t.person))}</span>` : ''}
+              ${t.hours ? `<span class="task-card-tag">&#9202; ${t.hours} Std.</span>` : ''}
+              ${t.dueDate ? `<span class="task-card-tag">&#128197; ${formatDate(t.dueDate)}</span>` : ''}
+            </div>
+          </div>
+        `).join('');
+      });
+    }
+
+    function escHtml(str) {
+      const d = document.createElement('div');
+      d.textContent = str || '';
+      return d.innerHTML;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr + 'T00:00:00');
+      return d.toLocaleDateString('de-CH');
+    }
+
+    // --- Drag & Drop ---
+    function onDragStart(e) {
+      draggedTaskId = e.target.dataset.id;
+      e.target.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function onDragEnd(e) {
+      e.target.classList.remove('dragging');
+      draggedTaskId = null;
+      document.querySelectorAll('.column-body').forEach(el => el.classList.remove('drag-over'));
+    }
+
+    function onDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      e.currentTarget.classList.add('drag-over');
+    }
+
+    function onDragLeave(e) {
+      e.currentTarget.classList.remove('drag-over');
+    }
+
+    function onDrop(e) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('drag-over');
+      const newStatus = e.currentTarget.dataset.status;
+      if (draggedTaskId && newStatus) {
+        const task = appData.tasks.find(t => t.id === draggedTaskId);
+        if (task) {
+          task.status = newStatus;
+          renderBoard();
+          saveData();
+        }
+      }
+    }
+
+    // --- Task Modal ---
+    function openTaskModal(taskId) {
+      const modal = document.getElementById('taskModal');
+      const title = document.getElementById('taskModalTitle');
+      const deleteBtn = document.getElementById('taskDeleteBtn');
+
+      // Populate selects
+      document.getElementById('taskProject').innerHTML = '<option value="">– Kein Projekt –</option>' +
+        appData.projects.map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join('');
+      document.getElementById('taskPerson').innerHTML = '<option value="">– Nicht zugeordnet –</option>' +
+        appData.persons.map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join('');
+
+      if (taskId) {
+        const task = appData.tasks.find(t => t.id === taskId);
+        if (!task) return;
+        title.textContent = 'Aufgabe bearbeiten';
+        document.getElementById('taskId').value = task.id;
+        document.getElementById('taskTitle').value = task.title;
+        document.getElementById('taskProject').value = task.project || '';
+        document.getElementById('taskPerson').value = task.person || '';
+        document.getElementById('taskHours').value = task.hours || '';
+        document.getElementById('taskDueDate').value = task.dueDate || '';
+        document.getElementById('taskStatus').value = task.status;
+        deleteBtn.style.display = 'inline-flex';
+      } else {
+        title.textContent = 'Neue Aufgabe';
+        document.getElementById('taskId').value = '';
+        document.getElementById('taskTitle').value = '';
+        document.getElementById('taskProject').value = '';
+        document.getElementById('taskPerson').value = '';
+        document.getElementById('taskHours').value = '';
+        document.getElementById('taskDueDate').value = '';
+        document.getElementById('taskStatus').value = 'planning';
+        deleteBtn.style.display = 'none';
+      }
+
+      modal.classList.add('active');
+      setTimeout(() => document.getElementById('taskTitle').focus(), 100);
+    }
+
+    function saveTask() {
+      const titleVal = document.getElementById('taskTitle').value.trim();
+      if (!titleVal) {
+        document.getElementById('taskTitle').style.borderColor = 'var(--danger)';
+        document.getElementById('taskTitle').focus();
+        return;
+      }
+
+      const id = document.getElementById('taskId').value;
+      const taskData = {
+        title: titleVal,
+        project: document.getElementById('taskProject').value,
+        person: document.getElementById('taskPerson').value,
+        hours: parseFloat(document.getElementById('taskHours').value) || 0,
+        dueDate: document.getElementById('taskDueDate').value,
+        status: document.getElementById('taskStatus').value,
+      };
+
+      if (id) {
+        const task = appData.tasks.find(t => t.id === id);
+        if (task) Object.assign(task, taskData);
+      } else {
+        appData.tasks.push({ id: generateId(), ...taskData, createdAt: new Date().toISOString() });
+      }
+
+      closeModal('taskModal');
+      renderBoard();
+      saveData();
+    }
+
+    function deleteTask() {
+      const id = document.getElementById('taskId').value;
+      if (!id) return;
+      if (!confirm('Aufgabe wirklich löschen?')) return;
+      appData.tasks = appData.tasks.filter(t => t.id !== id);
+      closeModal('taskModal');
+      renderBoard();
+      saveData();
+    }
+
+    // --- Persons Modal ---
+    function openPersonsModal() {
+      renderPersonsList();
+      document.getElementById('newPersonName').value = '';
+      document.getElementById('personsModal').classList.add('active');
+      setTimeout(() => document.getElementById('newPersonName').focus(), 100);
+    }
+
+    function renderPersonsList() {
+      const container = document.getElementById('personsList');
+      if (appData.persons.length === 0) {
+        container.innerHTML = '<div class="empty-state">Noch keine Personen erfasst</div>';
+        return;
+      }
+      container.innerHTML = appData.persons.map(p => `
+        <div class="list-item">
+          <span class="list-item-name" id="person-display-${p.id}">${escHtml(p.name)}</span>
+          <div class="list-item-actions">
+            <button class="btn btn-sm" onclick="editPerson('${p.id}')">Bearbeiten</button>
+            <button class="btn btn-sm btn-danger" onclick="deletePerson('${p.id}')">Löschen</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addPerson() {
+      const input = document.getElementById('newPersonName');
+      const name = input.value.trim();
+      if (!name) return;
+      appData.persons.push({ id: generateId(), name });
+      input.value = '';
+      renderPersonsList();
+      populateFilters();
+      input.focus();
+      saveData();
+    }
+
+    function editPerson(id) {
+      const person = appData.persons.find(p => p.id === id);
+      if (!person) return;
+      const newName = prompt('Name bearbeiten:', person.name);
+      if (newName && newName.trim()) {
+        person.name = newName.trim();
+        renderPersonsList();
+        populateFilters();
+        renderBoard();
+        saveData();
+      }
+    }
+
+    function deletePerson(id) {
+      if (!confirm('Person wirklich löschen?')) return;
+      appData.persons = appData.persons.filter(p => p.id !== id);
+      appData.tasks.forEach(t => { if (t.person === id) t.person = ''; });
+      renderPersonsList();
+      populateFilters();
+      renderBoard();
+      saveData();
+    }
+
+    // --- Projects Modal ---
+    function openProjectsModal() {
+      renderProjectsList();
+      document.getElementById('newProjectName').value = '';
+      document.getElementById('projectsModal').classList.add('active');
+      setTimeout(() => document.getElementById('newProjectName').focus(), 100);
+    }
+
+    function renderProjectsList() {
+      const container = document.getElementById('projectsList');
+      if (appData.projects.length === 0) {
+        container.innerHTML = '<div class="empty-state">Noch keine Projekte erfasst</div>';
+        return;
+      }
+      container.innerHTML = appData.projects.map(p => `
+        <div class="list-item">
+          <span class="list-item-name">${escHtml(p.name)}</span>
+          <div class="list-item-actions">
+            <button class="btn btn-sm" onclick="editProject('${p.id}')">Bearbeiten</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteProject('${p.id}')">Löschen</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function addProject() {
+      const input = document.getElementById('newProjectName');
+      const name = input.value.trim();
+      if (!name) return;
+      appData.projects.push({ id: generateId(), name });
+      input.value = '';
+      renderProjectsList();
+      populateFilters();
+      input.focus();
+      saveData();
+    }
+
+    function editProject(id) {
+      const project = appData.projects.find(p => p.id === id);
+      if (!project) return;
+      const newName = prompt('Projektname bearbeiten:', project.name);
+      if (newName && newName.trim()) {
+        project.name = newName.trim();
+        renderProjectsList();
+        populateFilters();
+        renderBoard();
+        saveData();
+      }
+    }
+
+    function deleteProject(id) {
+      if (!confirm('Projekt wirklich löschen? Aufgaben behalten ihre Zuordnung nicht.')) return;
+      appData.projects = appData.projects.filter(p => p.id !== id);
+      appData.tasks.forEach(t => { if (t.project === id) t.project = ''; });
+      renderProjectsList();
+      populateFilters();
+      renderBoard();
+      saveData();
+    }
+
+    // --- Modal helpers ---
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+
+    // Close modal on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', e => {
+        if (e.target === overlay) overlay.classList.remove('active');
+      });
+    });
+
+    // Close modal on Escape
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
+      }
+      // Enter in person/project input
+      if (e.key === 'Enter' && e.target.id === 'newPersonName') addPerson();
+      if (e.key === 'Enter' && e.target.id === 'newProjectName') addProject();
+    });
+
+    // Reset border color on input
+    document.getElementById('taskTitle').addEventListener('input', function() {
+      this.style.borderColor = '';
+    });
+
+    // --- Init ---
+    loadData();
+  </script>
+</body>
+</html>
