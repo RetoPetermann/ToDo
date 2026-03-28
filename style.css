@@ -292,10 +292,6 @@ select:focus, input:focus {
 }
 
 .column-body.drag-over {
-  background: var(--primary-light);
-  border-radius: 8px;
-  outline: 2px dashed var(--primary);
-  outline-offset: -4px;
 }
 
 /* Cards */
@@ -317,9 +313,60 @@ select:focus, input:focus {
 }
 
 .task-card.dragging {
-  opacity: 0.5;
-  transform: rotate(2deg);
+  opacity: 0;
+  height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  overflow: hidden;
+  pointer-events: none;
 }
+
+.task-card.drop-before {
+  border-top: 3px solid var(--primary);
+  margin-top: -1px;
+}
+
+.task-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.priority-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.priority-high {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.priority-medium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.priority-low {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+[data-theme="ocean"] .priority-high { background: #4a1c1c; color: #f87171; }
+[data-theme="ocean"] .priority-medium { background: #3b2f1a; color: #fbbf24; }
+[data-theme="ocean"] .priority-low { background: #1e3a5f; color: #60a5fa; }
+
+[data-theme="sunset"] .priority-high { background: #4a1c1c; color: #f87171; }
+[data-theme="sunset"] .priority-medium { background: #3b2f1a; color: #fbbf24; }
+[data-theme="sunset"] .priority-low { background: #1a2744; color: #60a5fa; }
 
 .task-card-title {
   font-weight: 600;

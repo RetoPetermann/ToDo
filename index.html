@@ -51,6 +51,15 @@
       <label>Bis</label>
       <input type="date" id="filterDateTo" onchange="renderBoard()">
     </div>
+    <div class="filter-group">
+      <label>Sortierung</label>
+      <select id="sortOrder" onchange="renderBoard()">
+        <option value="manual">Manuell</option>
+        <option value="project">Projekt</option>
+        <option value="person">Person</option>
+        <option value="priority">Priorität</option>
+      </select>
+    </div>
     <button class="btn btn-sm" onclick="clearFilters()">Filter zurücksetzen</button>
   </div>
 
@@ -100,6 +109,14 @@
       <div class="form-group">
         <label>Fälligkeitsdatum</label>
         <input type="date" id="taskDueDate">
+      </div>
+      <div class="form-group">
+        <label>Priorität</label>
+        <select id="taskPriority">
+          <option value="high">Hoch</option>
+          <option value="medium">Mittel</option>
+          <option value="low">Niedrig</option>
+        </select>
       </div>
       <div class="form-group">
         <label>Status</label>
@@ -162,6 +179,11 @@
         .then(function(data) {
           console.log('Daten geladen:', data);
           appData = data;
+          // Migration: Bestehende Tasks ohne priority/order ergänzen
+          appData.tasks.forEach((t, i) => {
+            if (!t.priority) t.priority = 'medium';
+            if (t.order === undefined) t.order = i;
+          });
           applyTheme();
           populateFilters();
           renderBoard();
@@ -205,6 +227,11 @@
     function getProjectName(id) {
       const p = appData.projects.find(p => p.id === id);
       return p ? p.name : '';
+    }
+
+    function getPriorityLabel(priority) {
+      const labels = { high: 'Hoch', medium: 'Mittel', low: 'Niedrig' };
+      return labels[priority] || 'Mittel';
     }
 
     // --- Theme ---
@@ -266,13 +293,32 @@
     }
 
     // --- Board Rendering ---
+    function sortTasks(tasks) {
+      const sortOrder = document.getElementById('sortOrder').value;
+      const priorityOrder = { high: 0, medium: 1, low: 2 };
+
+      if (sortOrder === 'manual') {
+        return tasks.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+      }
+      if (sortOrder === 'priority') {
+        return tasks.slice().sort((a, b) => priorityOrder[a.priority || 'medium'] - priorityOrder[b.priority || 'medium']);
+      }
+      if (sortOrder === 'project') {
+        return tasks.slice().sort((a, b) => getProjectName(a.project).localeCompare(getProjectName(b.project)));
+      }
+      if (sortOrder === 'person') {
+        return tasks.slice().sort((a, b) => getPersonName(a.person).localeCompare(getPersonName(b.person)));
+      }
+      return tasks;
+    }
+
     function renderBoard() {
       const tasks = getFilteredTasks();
       const statuses = ['planning', 'working', 'done'];
 
       statuses.forEach(status => {
         const body = document.querySelector(`.column-body[data-status="${status}"]`);
-        const statusTasks = tasks.filter(t => t.status === status);
+        const statusTasks = sortTasks(tasks.filter(t => t.status === status));
         const countEl = document.getElementById(`count-${status}`);
         countEl.textContent = statusTasks.length;
 
@@ -285,7 +331,10 @@
           <div class="task-card" draggable="true" data-id="${t.id}"
                ondragstart="onDragStart(event)" ondragend="onDragEnd(event)"
                ondblclick="openTaskModal('${t.id}')">
-            ${t.project ? `<div class="task-card-project">${escHtml(getProjectName(t.project))}</div>` : ''}
+            <div class="task-card-top">
+              ${t.project ? `<div class="task-card-project">${escHtml(getProjectName(t.project))}</div>` : ''}
+              <span class="priority-badge priority-${t.priority || 'medium'}">${getPriorityLabel(t.priority)}</span>
+            </div>
             <div class="task-card-title">${escHtml(t.title)}</div>
             <div class="task-card-meta">
               ${t.person ? `<span class="task-card-tag">&#128100; ${escHtml(getPersonName(t.person))}</span>` : ''}
@@ -310,40 +359,101 @@
     }
 
     // --- Drag & Drop ---
+    let currentDropTarget = null; // ID der Karte vor der eingefügt wird, oder '__end__'
+
     function onDragStart(e) {
       draggedTaskId = e.target.dataset.id;
-      e.target.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
+      // Timeout damit der Browser zuerst das Drag-Image erstellt
+      requestAnimationFrame(() => {
+        e.target.classList.add('dragging');
+      });
     }
 
     function onDragEnd(e) {
       e.target.classList.remove('dragging');
       draggedTaskId = null;
+      currentDropTarget = null;
       document.querySelectorAll('.column-body').forEach(el => el.classList.remove('drag-over'));
+      document.querySelectorAll('.task-card').forEach(el => el.classList.remove('drop-before'));
+    }
+
+    function getClosestCard(container, y) {
+      const cards = Array.from(container.querySelectorAll('.task-card:not(.dragging)'));
+      let closest = null;
+      let closestOffset = Number.POSITIVE_INFINITY;
+
+      for (const card of cards) {
+        const box = card.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && -offset < closestOffset) {
+          closestOffset = -offset;
+          closest = card;
+        }
+      }
+
+      return closest;
     }
 
     function onDragOver(e) {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      e.currentTarget.classList.add('drag-over');
+      const columnBody = e.currentTarget;
+      columnBody.classList.add('drag-over');
+
+      const afterCard = getClosestCard(columnBody, e.clientY);
+      const newTarget = afterCard ? afterCard.dataset.id : '__end__';
+
+      // Nur DOM ändern wenn sich die Position tatsächlich ändert
+      if (newTarget === currentDropTarget) return;
+      currentDropTarget = newTarget;
+
+      // Alle bisherigen Markierungen entfernen
+      columnBody.querySelectorAll('.task-card').forEach(el => el.classList.remove('drop-before'));
+
+      if (afterCard) {
+        afterCard.classList.add('drop-before');
+      }
     }
 
     function onDragLeave(e) {
+      // Nur reagieren wenn wirklich die Spalte verlassen wird
+      if (e.currentTarget.contains(e.relatedTarget)) return;
       e.currentTarget.classList.remove('drag-over');
+      e.currentTarget.querySelectorAll('.task-card').forEach(el => el.classList.remove('drop-before'));
+      currentDropTarget = null;
     }
 
     function onDrop(e) {
       e.preventDefault();
       e.currentTarget.classList.remove('drag-over');
+      e.currentTarget.querySelectorAll('.task-card').forEach(el => el.classList.remove('drop-before'));
       const newStatus = e.currentTarget.dataset.status;
-      if (draggedTaskId && newStatus) {
-        const task = appData.tasks.find(t => t.id === draggedTaskId);
-        if (task) {
-          task.status = newStatus;
-          renderBoard();
-          saveData();
-        }
+      if (!draggedTaskId || !newStatus) return;
+
+      const task = appData.tasks.find(t => t.id === draggedTaskId);
+      if (!task) return;
+
+      task.status = newStatus;
+
+      // Position innerhalb der Spalte bestimmen
+      const afterCard = getClosestCard(e.currentTarget, e.clientY);
+      const columnTasks = sortTasks(appData.tasks.filter(t => t.status === newStatus && t.id !== draggedTaskId));
+
+      let insertIndex;
+      if (afterCard) {
+        insertIndex = columnTasks.findIndex(t => t.id === afterCard.dataset.id);
+      } else {
+        insertIndex = columnTasks.length;
       }
+
+      // Order-Werte für alle Tasks in dieser Spalte neu berechnen
+      columnTasks.splice(insertIndex, 0, task);
+      columnTasks.forEach((t, i) => t.order = i);
+
+      currentDropTarget = null;
+      renderBoard();
+      saveData();
     }
 
     // --- Task Modal ---
@@ -368,6 +478,7 @@
         document.getElementById('taskPerson').value = task.person || '';
         document.getElementById('taskHours').value = task.hours || '';
         document.getElementById('taskDueDate').value = task.dueDate || '';
+        document.getElementById('taskPriority').value = task.priority || 'medium';
         document.getElementById('taskStatus').value = task.status;
         deleteBtn.style.display = 'inline-flex';
       } else {
@@ -378,6 +489,7 @@
         document.getElementById('taskPerson').value = '';
         document.getElementById('taskHours').value = '';
         document.getElementById('taskDueDate').value = '';
+        document.getElementById('taskPriority').value = 'medium';
         document.getElementById('taskStatus').value = 'planning';
         deleteBtn.style.display = 'none';
       }
@@ -401,6 +513,7 @@
         person: document.getElementById('taskPerson').value,
         hours: parseFloat(document.getElementById('taskHours').value) || 0,
         dueDate: document.getElementById('taskDueDate').value,
+        priority: document.getElementById('taskPriority').value,
         status: document.getElementById('taskStatus').value,
       };
 
@@ -408,7 +521,8 @@
         const task = appData.tasks.find(t => t.id === id);
         if (task) Object.assign(task, taskData);
       } else {
-        appData.tasks.push({ id: generateId(), ...taskData, createdAt: new Date().toISOString() });
+        const maxOrder = appData.tasks.filter(t => t.status === taskData.status).reduce((max, t) => Math.max(max, t.order || 0), -1);
+        appData.tasks.push({ id: generateId(), ...taskData, order: maxOrder + 1, createdAt: new Date().toISOString() });
       }
 
       closeModal('taskModal');
